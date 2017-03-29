@@ -1,0 +1,105 @@
+--- a/drivers/net/wireless/marvell/mwifiex/cfg80211.c	2017-03-29 16:14:10.332944846 -0400
++++ a/drivers/net/wireless/marvell/mwifiex/cfg80211.c	2017-03-29 16:34:18.996676134 -0400
+@@ -417,6 +417,8 @@
+ 			    "info: ignore timeout value for IEEE Power Save\n");
+ 
+ 	ps_mode = enabled;
++mwifiex_dbg(priv->adapter, ERROR, "jpw: hacking ps_mode to false\n");
++	ps_mode = 0;
+ 
+ 	return mwifiex_drv_set_power(priv, &ps_mode);
+ }
+--- a/drivers/net/wireless/marvell/mwifiex/pcie.c	2017-03-29 16:14:10.336278179 -0400
++++ a/drivers/net/wireless/marvell/mwifiex/pcie.c	2017-03-29 16:52:11.933405894 -0400
+@@ -498,6 +498,8 @@
+  */
+ static int mwifiex_pcie_disable_host_int(struct mwifiex_adapter *adapter)
+ {
++//	mwifiex_dbg(adapter, ERROR,
++//				    "disable_host_int");
+ 	if (mwifiex_pcie_ok_to_access_hw(adapter)) {
+ 		if (mwifiex_write_reg(adapter, PCIE_HOST_INT_MASK,
+ 				      0x00000000)) {
+@@ -506,8 +508,11 @@
+ 			return -1;
+ 		}
+ 	}
+-
++	else
++		mwifiex_dbg(adapter, ERROR,
++		    "Did NOT really disable host interrupt.\n");
+ 	atomic_set(&adapter->tx_hw_pending, 0);
++
+ 	return 0;
+ }
+ 
+@@ -1692,6 +1697,14 @@
+ 
+ 	pkt_len = *((__le16 *)skb->data);
+ 	rx_len = le16_to_cpu(pkt_len);
++	if (rx_len == 0) {
++		mwifiex_dbg(adapter, ERROR,
++					"0 byte cmdrsp\n");
++		mwifiex_map_pci_memory(adapter, skb, MWIFIEX_UPLD_SIZE,
++					   PCI_DMA_FROMDEVICE);
++		return 0;
++	}
++
+ 	skb_put(skb, MWIFIEX_UPLD_SIZE - skb->len);
+ 	skb_trim(skb, rx_len);
+ 	skb_pull(skb, INTF_HEADER_LEN);
+@@ -2298,8 +2311,10 @@
+ 	}
+ 	adapter->int_status = 0;
+ 	spin_unlock_irqrestore(&adapter->int_lock, flags);
++	mwifiex_dbg(adapter, INTR, "popped ireg: 0x%08x\n", pcie_ireg);
+ 
+ 	if (card->msi_enable) {
++#if defined(JPW_EXPERIMENT_1)
+ 		if (mwifiex_pcie_ok_to_access_hw(adapter)) {
+ 			if (mwifiex_read_reg(adapter, PCIE_HOST_INT_STATUS,
+ 					     &pcie_ireg)) {
+@@ -2324,6 +2339,8 @@
+ 				}
+ 			}
+ 		}
++#endif
++
+ 	}
+ 	while (pcie_ireg & HOST_INTR_MASK) {
+ 		if (pcie_ireg & HOST_INTR_DNLD_DONE) {
+--- a/drivers/net/wireless/marvell/mwifiex/sta_cmd.c	2017-03-29 16:14:10.336278179 -0400
++++ a/drivers/net/wireless/marvell/mwifiex/sta_cmd.c	2017-03-29 16:55:53.796752273 -0400
+@@ -2303,7 +2303,7 @@
+ 		if (ret)
+ 			return -1;
+ 
+-		if (priv->bss_type != MWIFIEX_BSS_TYPE_UAP) {
++		if (0 && priv->bss_type != MWIFIEX_BSS_TYPE_UAP) {
+ 			/* Enable IEEE PS by default */
+ 			priv->adapter->ps_mode = MWIFIEX_802_11_POWER_MODE_PSP;
+ 			ret = mwifiex_send_cmd(priv,
+@@ -2359,7 +2359,7 @@
+ 	if (ret)
+ 		return -1;
+ 
+-	if (!disable_auto_ds &&
++	if (0 && !disable_auto_ds &&
+ 	    first_sta && priv->adapter->iface_type != MWIFIEX_USB &&
+ 	    priv->bss_type != MWIFIEX_BSS_TYPE_UAP) {
+ 		/* Enable auto deep sleep */
+--- a/drivers/net/wireless/marvell/mwifiex/util.c	2017-03-29 16:14:10.336278179 -0400
++++ a/drivers/net/wireless/marvell/mwifiex/util.c	2017-03-29 16:58:16.960094026 -0400
+@@ -407,8 +407,11 @@
+ 	u16 pkt_len;
+ 	struct ieee80211_hdr *ieee_hdr;
+ 
+-	if (!skb)
++	if (!skb){
++		mwifiex_dbg(priv->adapter, ERROR,
++				"no skb");
+ 		return -1;
++	}
+ 
+ 	if (!priv->mgmt_frame_mask ||
+ 	    priv->wdev.iftype == NL80211_IFTYPE_UNSPECIFIED) {
